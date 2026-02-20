@@ -1,9 +1,11 @@
+#include <vector>
 #define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
 #include <cmath>
 #include <cstring>
-
-
+#include <fstream>
+#include <strstream>
+#include <algorithm>
 
 using namespace std;
 
@@ -19,7 +21,42 @@ struct triangle {
 };
 
 struct mesh{
-  std::vector<triangle> tris;
+  vector<triangle> tris;
+
+  bool LoadFromObjectFile(string sFilename) {
+    
+    ifstream f(sFilename);
+    if(!f.is_open())
+      return false;
+
+    // Local cache of verts
+    vector<vec3d> verts;
+    while (!f.eof()) {
+      char line[128];
+      f.getline(line, 128);
+     
+      strstream s;
+      s << line;
+
+      char junk;
+
+      if(line[0] == 'v') {
+        vec3d v;
+        s >> junk >> v.x >> v.y >> v.z;
+        verts.push_back(v);
+      }
+
+      if(line[0] == 'f') {
+        int f[3];
+        s >> junk >> f[0] >> f[1] >> f[2];
+        tris.push_back({ verts[f[0] - 1], verts[f[1] - 1], verts[f[2] - 1] });
+      }
+
+    }
+
+    return true;
+  }
+
 };
 
 struct mat4x4 {
@@ -65,6 +102,7 @@ class olcEngine3D : public olc::PixelGameEngine
     public:
       bool OnUserCreate() override {
         
+        /*
         meshCube.tris = {
           
           // SOUTH
@@ -92,7 +130,9 @@ class olcEngine3D : public olc::PixelGameEngine
           { { { 1.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } } },
 
         };
-
+        */   
+        
+        meshCube.LoadFromObjectFile("assets/VideoShip.obj"); 
 
         // Projection Matrix 
         float fNear = 0.1f; 
@@ -134,6 +174,8 @@ class olcEngine3D : public olc::PixelGameEngine
         matRotX.m[2][2] = cosf(fTheta * 0.5f);
         matRotX.m[3][3] = 1;
 
+        vector<triangle> vecTrianglesToRaster;
+
         // Draw triangles
         for (auto tri: meshCube.tris) {
           triangle triProjected, triTranslated, triRotatedZ, triRotatedZX;
@@ -150,9 +192,9 @@ class olcEngine3D : public olc::PixelGameEngine
 
           // Offset into screen
           triTranslated = triRotatedZX;
-          triTranslated.p[0].z = triRotatedZX.p[0].z + 3.0f;
-          triTranslated.p[1].z = triRotatedZX.p[1].z + 3.0f;
-          triTranslated.p[2].z = triRotatedZX.p[2].z + 3.0f;
+          triTranslated.p[0].z = triRotatedZX.p[0].z + 8.0f;
+          triTranslated.p[1].z = triRotatedZX.p[1].z + 8.0f;
+          triTranslated.p[2].z = triRotatedZX.p[2].z + 8.0f;
 
 
           vec3d normal, line1, line2;
@@ -191,8 +233,6 @@ class olcEngine3D : public olc::PixelGameEngine
                 normal.z * light_direction.z);
 
 
-            olc::Pixel colour = GetColour(dot_product);
-
 
             // Project triangles 3D -> 2D
             MultiplyMatrixVector(triTranslated.p[0], triProjected.p[0], matProj);
@@ -212,22 +252,39 @@ class olcEngine3D : public olc::PixelGameEngine
             triProjected.p[2].x *= 0.5f * (float)ScreenWidth();
             triProjected.p[2].y *= 0.5f * (float)ScreenHeight();
 
-            FillTriangle(
-              triProjected.p[0].x, triProjected.p[0].y,
-              triProjected.p[1].x, triProjected.p[1].y,
-              triProjected.p[2].x, triProjected.p[2].y,
-              colour);
- 
+            // Save color inside triangle
+            triProjected.col = GetColour(dot_product);
             
-            /*DrawTriangle(
-              triProjected.p[0].x, triProjected.p[0].y,
-              triProjected.p[1].x, triProjected.p[1].y,
-              triProjected.p[2].x, triProjected.p[2].y,
-              olc::BLACK);
-             */ 
-          
+            // Store triangle for soting
+            vecTrianglesToRaster.push_back(triProjected);         
           }
 
+        }
+
+        // Sort triangles from back to front
+        sort(vecTrianglesToRaster.begin(), vecTrianglesToRaster.end(), [](triangle &t1, triangle &t2) {
+            float z1 = (t1.p[0].z + t1.p[1].z + t1.p[2].z) / 3.0f;
+            float z2 = (t2.p[0].z + t2.p[1].z + t2.p[2].z) / 3.0f;
+            return z1 > z2;
+        });
+
+
+        for(auto &triProjected : vecTrianglesToRaster) {
+
+          // Rasterize triangle
+          FillTriangle(
+            triProjected.p[0].x, triProjected.p[0].y,
+            triProjected.p[1].x, triProjected.p[1].y,
+            triProjected.p[2].x, triProjected.p[2].y,
+            triProjected.col);
+ 
+            
+          /*DrawTriangle(
+            triProjected.p[0].x, triProjected.p[0].y,
+            triProjected.p[1].x, triProjected.p[1].y,
+            triProjected.p[2].x, triProjected.p[2].y,
+            olc::BLACK);
+          */ 
         }
 
         return true;

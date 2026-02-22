@@ -4,14 +4,17 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
-#include <strstream>
+#include <sstream>
 #include <algorithm>
 
 using namespace std;
 
 
 struct vec3d {
-  float x, y, z;
+  float x = 0; 
+  float y = 0; 
+  float z = 0; 
+  float w = 1;
 };
 
 
@@ -35,8 +38,7 @@ struct mesh{
       char line[128];
       f.getline(line, 128);
      
-      strstream s;
-      s << line;
+      std::stringstream s(line);
 
       char junk;
 
@@ -80,21 +82,151 @@ class olcEngine3D : public olc::PixelGameEngine
       vec3d vCamera = {0.0f, 0.0f, 0.0f};
   
 
-      void MultiplyMatrixVector(vec3d &i, vec3d &o, mat4x4 &m) {
-        o.x = i.x * m.m[0][0] + i.y * m.m[1][0] + i.z * m.m[2][0] + m.m[3][0];
-        o.y = i.x * m.m[0][1] + i.y * m.m[1][1] + i.z * m.m[2][1] + m.m[3][1];
-        o.z = i.x * m.m[0][2] + i.y * m.m[1][2] + i.z * m.m[2][2] + m.m[3][2];
-        float w = i.x * m.m[0][3] + i.y * m.m[1][3] + i.z * m.m[2][3] + m.m[3][3];
-        
-        if(w != 0.0f) {
-          o.x /= w; o.y /= w; o.z /= w;
-        }
+      vec3d Matrix_MultiplyVector(mat4x4 &m, vec3d &i) {
+        vec3d v;
+        v.x = i.x * m.m[0][0] + i.y * m.m[1][0] + i.z * m.m[2][0] + i.w * m.m[3][0];
+        v.y = i.x * m.m[0][1] + i.y * m.m[1][1] + i.z * m.m[2][1] + i.w * m.m[3][1];
+        v.z = i.x * m.m[0][2] + i.y * m.m[1][2] + i.z * m.m[2][2] + i.w * m.m[3][2];
+        v.w = i.x * m.m[0][3] + i.y * m.m[1][3] + i.z * m.m[2][3] + i.w * m.m[3][3];
+        return v;
       }
 
+      mat4x4 Matrix_MakeIdentity() {
+        mat4x4 matrix;
+        matrix.m[0][0] = 1.0f;
+        matrix.m[1][1] = 1.0f;
+        matrix.m[2][2] = 1.0f;
+        matrix.m[3][3] = 1.0f;
+        return matrix;
+      }
+
+      mat4x4 Matrix_makeRotationX(float fAngleRad) { 
+        mat4x4 matrix;
+        matrix.m[0][0] = 1.0f;
+        matrix.m[1][1] = cosf(fAngleRad);
+        matrix.m[1][2] = sinf(fAngleRad);
+        matrix.m[2][1] = -sinf(fAngleRad);
+        matrix.m[2][2] = cosf(fAngleRad);
+        matrix.m[3][3] = 1.0f;
+        return matrix;
+      }
+      
+
+      mat4x4 Matrix_makeRotationY(float fAngleRad) { 
+        mat4x4 matrix;
+        matrix.m[0][0] = cosf(fAngleRad);
+        matrix.m[1][1] = sinf(fAngleRad);
+        matrix.m[1][2] = -sinf(fAngleRad);
+        matrix.m[2][1] = 1.0f;
+        matrix.m[2][2] = cosf(fAngleRad);
+        matrix.m[3][3] = 1.0f;
+        return matrix;
+      }
+      
+      mat4x4 Matrix_makeRotationZ(float fAngleRad) {
+        mat4x4 matrix;
+        matrix.m[0][0] = cosf(fAngleRad);
+        matrix.m[0][1] = sinf(fAngleRad);
+        matrix.m[1][0] = -sinf(fAngleRad);
+        matrix.m[1][1] = cosf(fAngleRad);
+        matrix.m[2][2] = 1.0f;
+        matrix.m[3][3] = 1.0f;
+        return matrix;
+      }
+
+
+
+      mat4x4 Matrix_MakeTranslation(float x, float y, float z) {
+        mat4x4 matrix;
+        matrix.m[0][0] = 1.0f;
+        matrix.m[1][1] = 1.0f;
+        matrix.m[2][2] = 1.0f;
+        matrix.m[3][3] = 1.0f;
+        matrix.m[3][0] = x;
+        matrix.m[3][1] = y;
+        matrix.m[3][2] = z;
+        return matrix;
+      }
+
+      float fFovRad_Calc(float fFovDegrees) {
+        return 1.0f / tanf(fFovDegrees * 0.5f / 180.0f * (float)M_PI);
+      }
+
+      mat4x4 Matrix_MakeProjection(
+          float fFovDegrees, 
+          float fAspectRatio,
+          float fNear,
+          float fFar
+      ){
+        float fFovRad = fFovRad_Calc(fFovDegrees);
+        mat4x4 matrix;
+        matrix.m[0][0] = fAspectRatio * fFovRad;
+        matrix.m[1][1] = fFovRad;
+        matrix.m[2][2] = fFar/ (fFar - fNear);
+        matrix.m[3][2] = (-fFar * fNear) / (fFar - fNear);
+        matrix.m[2][3] = 1.0f;
+        matrix.m[3][3] = 1.0f;
+        return matrix;
+      }
+
+      mat4x4 Matrix_MultiplyMatrix(mat4x4 &m1, mat4x4 &m2) {
+        mat4x4 matrix;
+        for(int c = 0; c < 4; c++) {
+          for(int r = 0; r < 4; r++) {
+            matrix.m[r][c] = 
+              m1.m[r][0] * m2.m[0][c] + 
+              m1.m[r][1] * m2.m[1][c] + 
+              m1.m[r][2] * m2.m[2][c] +  
+              m1.m[r][3] * m2.m[3][c];
+          }
+        }
+        return matrix;
+      }
+
+      vec3d Vector_Add(vec3d &v1, vec3d &v2) {
+        return { v1.x + v2.x, v1.y + v2.y, v1.z + v2.z };
+      }  
+
+      vec3d Vector_Sub(vec3d &v1, vec3d &v2) {
+        return { v1.x - v2.x, v1.y - v2.y, v1.z - v2.z };
+      }  
+
+      vec3d Vector_Mul(vec3d &v1, float k) {
+        return { v1.x * k, v1.y * k, v1.z * k };
+      }  
+
+
+      vec3d Vector_Div(vec3d &v1, float k) {
+        return { v1.x / k, v1.y / k, v1.z / k };
+      }
+
+      float Vector_DotProduct(vec3d &v1, vec3d &v2) {
+        return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+      }
+
+      float Vector_Lenght(vec3d &v) {
+        return sqrtf(Vector_DotProduct(v, v));
+      }
+
+      vec3d Vector_Normalize(vec3d &v) {
+        float l = Vector_Lenght(v);
+        return { v.x / l, v.y / l, v.z / l};
+      }
+
+      vec3d Vector_CrossProduct(vec3d &v1, vec3d &v2) {
+        vec3d v;
+        v.x = v1.y * v2.z - v1.z * v2.y;
+        v.y = v1.z * v2.x - v1.x * v2.z;
+        v.z = v1.x * v2.y - v1.y * v2.x;
+        return v;
+      }
+
+
+      // Func responsible for shading the 3d objs
       olc::Pixel GetColour(float lum) {
         int c = (int)(lum * 255.0f);
         c = std::max(0, std::min(255, c));
-        return olc::Pixel(c, c, c); // escala de cinza}
+        return olc::Pixel(c, c, c);
       }
 
 
@@ -102,51 +234,15 @@ class olcEngine3D : public olc::PixelGameEngine
     public:
       bool OnUserCreate() override {
         
-        /*
-        meshCube.tris = {
-          
-          // SOUTH
-          { { { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 1.0f, 1.0f, 0.0f } } },
-          { { { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } } },
-          
-          // EAST
-          { { { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 0.0f }, { 1.0f, 1.0f, 1.0f } } },
-          { { { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f }, { 1.0f, 0.0f, 1.0f } } },
-          
-          // NORTH
-          { { { 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 1.0f } } },
-          { { { 1.0f, 0.0f, 1.0f }, { 0.0f, 1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } } },
-          
-          //WEST
-          { { { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } } },
-          { { { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } } },
-          
-          // TOP
-          { { { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f } } },
-          { { { 0.0f, 1.0f, 0.0f }, { 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 0.0f } } },
-          
-          // BOTTOM
-          { { { 1.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } } },
-          { { { 1.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } } },
-
-        };
-        */   
-        
         meshCube.LoadFromObjectFile("assets/VideoShip.obj"); 
 
-        // Projection Matrix 
-        float fNear = 0.1f; 
-        float fFar = 1000.0f;
-        float fFov = 90.0f;
-        float fAspectRatio = (float)ScreenHeight() / (float)ScreenWidth();
-        float fFovRad = 1.0f/ tanf(fFov * 0.5f / 180.0f * 3.14159f); 
 
-        matProj.m[0][0] = fAspectRatio * fFovRad;
-        matProj.m[1][1] = fFovRad;
-        matProj.m[2][2] = fFar / (fFar - fNear);
-        matProj.m[3][2] = (-fFar * fNear) / (fFar - fNear);
-        matProj.m[2][3] = 1.0f;
-        matProj.m[3][3] = 0.0f;
+        // Projection Matrix 
+        matProj = Matrix_MakeProjection(
+            90.0f, 
+            (float)ScreenHeight() / (float)ScreenWidth(), 
+            0.1f, 
+            1000.0f);
 
         return true;
       }
@@ -157,94 +253,74 @@ class olcEngine3D : public olc::PixelGameEngine
 
         mat4x4 matRotZ, matRotX; 
         fTheta += 1.0f * fElapsedTime;
+        
+        matRotZ = Matrix_makeRotationZ(fTheta * 0.5f);
+        matRotX = Matrix_makeRotationX(fTheta * 0.5f);
 
-        // Rotation Z 
-        matRotZ.m[0][0] = cosf(fTheta);
-        matRotZ.m[0][1] = sinf(fTheta);
-        matRotZ.m[1][0] = -sinf(fTheta);
-        matRotZ.m[1][1] = cosf(fTheta);
-        matRotZ.m[2][2] = 1;
-        matRotZ.m[3][3] = 1;
+        mat4x4 matTrans;
+        matTrans = Matrix_MakeTranslation(0.0f, 0.0f, 16.0f);
 
-        // Rotation X 
-        matRotX.m[0][0] = 1;
-        matRotX.m[1][1] = cosf(fTheta * 0.5f);
-        matRotX.m[1][2] = sinf(fTheta * 0.5f);
-        matRotX.m[2][1] = -sinf(fTheta * 0.5f);
-        matRotX.m[2][2] = cosf(fTheta * 0.5f);
-        matRotX.m[3][3] = 1;
+        mat4x4 matWorld;
+        matWorld = Matrix_MakeIdentity();
+        matWorld = Matrix_MultiplyMatrix(matRotZ, matRotX);
+        matWorld = Matrix_MultiplyMatrix(matWorld, matTrans);
 
+        // Stores triangles for rastering later
         vector<triangle> vecTrianglesToRaster;
 
         // Draw triangles
         for (auto tri: meshCube.tris) {
-          triangle triProjected, triTranslated, triRotatedZ, triRotatedZX;
           
-          // Rotate in Z-Axis
-          MultiplyMatrixVector(tri.p[0], triRotatedZ.p[0], matRotZ);
-          MultiplyMatrixVector(tri.p[1], triRotatedZ.p[1], matRotZ);
-          MultiplyMatrixVector(tri.p[2], triRotatedZ.p[2], matRotZ);
-
-          // Rotate in X-Axis
-          MultiplyMatrixVector(triRotatedZ.p[0], triRotatedZX.p[0], matRotX);
-          MultiplyMatrixVector(triRotatedZ.p[1], triRotatedZX.p[1], matRotX);
-          MultiplyMatrixVector(triRotatedZ.p[2], triRotatedZX.p[2], matRotX);
-
-          // Offset into screen
-          triTranslated = triRotatedZX;
-          triTranslated.p[0].z = triRotatedZX.p[0].z + 8.0f;
-          triTranslated.p[1].z = triRotatedZX.p[1].z + 8.0f;
-          triTranslated.p[2].z = triRotatedZX.p[2].z + 8.0f;
+          triangle triProjected, triTransformed;
+          
+          // Rotation
+          triTransformed.p[0] = Matrix_MultiplyVector(matWorld, tri.p[0]);
+          triTransformed.p[1] = Matrix_MultiplyVector(matWorld, tri.p[1]);
+          triTransformed.p[2] = Matrix_MultiplyVector(matWorld, tri.p[2]);
 
 
+          // Use Cross Product to get surface normal
           vec3d normal, line1, line2;
-          line1.x = triTranslated.p[1].x - triTranslated.p[0].x;
-          line1.y = triTranslated.p[1].y - triTranslated.p[0].y;
-          line1.z = triTranslated.p[1].z - triTranslated.p[0].z;
-
-          line2.x = triTranslated.p[2].x - triTranslated.p[0].x;
-          line2.y = triTranslated.p[2].y - triTranslated.p[0].y;
-          line2.z = triTranslated.p[2].z - triTranslated.p[0].z;
           
-          normal.x = line1.y * line2.z - line1.z * line2.y;
-          normal.y = line1.z * line2.x - line1.x * line2.z;
-          normal.z = line1.x * line2.y - line1.y * line2.x;
+          line1 = Vector_Sub(triTransformed.p[1], triTransformed.p[0]);
+          line2 = Vector_Sub(triTransformed.p[2], triTransformed.p[0]);
 
-          float l = sqrtf(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z)  ;
-          normal.x /= l; normal.y /= l; normal.z /= l;
+          normal = Vector_CrossProduct(line1, line2);
+          normal = Vector_Normalize(normal);
 
-          
-          if(
-              normal.x * (triTranslated.p[0].x - vCamera.x) +
-              normal.y * (triTranslated.p[0].y - vCamera.y) +
-              normal.z * (triTranslated.p[0].z - vCamera.z) < 0.0 
-            ) {
 
-            vec3d light_direction = { 0.0f, 0.0f, -1.0f};
-            float a = sqrtf(
-                light_direction.x*light_direction.x + 
-                light_direction.y*light_direction.y +
-                light_direction.z*light_direction.z);
-            light_direction.x /= a; light_direction.y /= a; light_direction.z /= a;
-              
-            float dot_product = std::max(0.1f, 
-                normal.x * light_direction.x + 
-                normal.y * light_direction.y + 
-                normal.z * light_direction.z);
+          // Get Ray from triangles to camera 
+          vec3d vCameraRay = Vector_Sub(triTransformed.p[0], vCamera);
+          if( Vector_DotProduct(normal, vCameraRay) < 0.0f ) {
+            
+            // Illumination
+            vec3d light_direction = { 0.0f, 1.0f, -1.0f };
+            light_direction = Vector_Normalize(light_direction);
+
+            float dp = max(0.1f, Vector_DotProduct(light_direction, normal));
 
 
 
             // Project triangles 3D -> 2D
-            MultiplyMatrixVector(triTranslated.p[0], triProjected.p[0], matProj);
-            MultiplyMatrixVector(triTranslated.p[1], triProjected.p[1], matProj);
-            MultiplyMatrixVector(triTranslated.p[2], triProjected.p[2], matProj);
-
-
+            triProjected.p[0] = Matrix_MultiplyVector(matProj, triTransformed.p[0]);
+            triProjected.p[1] = Matrix_MultiplyVector(matProj, triTransformed.p[1]);
+            triProjected.p[2] = Matrix_MultiplyVector(matProj, triTransformed.p[2]);
+            
+            // Copy value for Getcolour
+            triProjected.col = triTransformed.col;
+            
             // Scale into view
-            triProjected.p[0].x += 1.0f; triProjected.p[0].y += 1.0f;
-            triProjected.p[1].x += 1.0f; triProjected.p[1].y += 1.0f;
-            triProjected.p[2].x += 1.0f; triProjected.p[2].y += 1.0f;
+            triProjected.p[0] = Vector_Div(triProjected.p[0], triProjected.p[0].w);
+            triProjected.p[1] = Vector_Div(triProjected.p[1], triProjected.p[1].w);
+            triProjected.p[2] = Vector_Div(triProjected.p[2], triProjected.p[2].w);
 
+
+            // Offset verts into visible normalized space
+            vec3d vOffsetView = { 1, 1, 0 };
+            triProjected.p[0] = Vector_Add(triProjected.p[0], vOffsetView);
+            triProjected.p[1] = Vector_Add(triProjected.p[1], vOffsetView);
+            triProjected.p[2] = Vector_Add(triProjected.p[2], vOffsetView);
+            
             triProjected.p[0].x *= 0.5f * (float)ScreenWidth();
             triProjected.p[0].y *= 0.5f * (float)ScreenHeight();
             triProjected.p[1].x *= 0.5f * (float)ScreenWidth();
@@ -253,7 +329,7 @@ class olcEngine3D : public olc::PixelGameEngine
             triProjected.p[2].y *= 0.5f * (float)ScreenHeight();
 
             // Save color inside triangle
-            triProjected.col = GetColour(dot_product);
+            triProjected.col = GetColour(dp);
             
             // Store triangle for soting
             vecTrianglesToRaster.push_back(triProjected);         

@@ -3,6 +3,7 @@
 #include "../includes/engine.h"
 #include "../includes/clipping.h"
 #include "../includes/math_utils.h"
+#include "../includes/texturing.h"
 #include <algorithm>
 #include <list>
 #include <vector>
@@ -15,7 +16,8 @@ olc::Pixel olcEngine3D::GetColour(float lum) {
 }
 
 bool olcEngine3D::OnUserCreate() {
-  meshCube.LoadFromObjectFile("assets/mountains.obj");
+  meshCube.LoadFromObjectFile("assets/cube.obj");
+  sprite1 = new olc::Sprite("assets/minijario.png");
   matProj = Matrix_MakeProjection(
       90.0f, (float)ScreenHeight() / (float)ScreenWidth(), 0.1f, 1000.0f);
   return true;
@@ -181,8 +183,11 @@ bool olcEngine3D::OnUserUpdate(float fElapsedTime) {
     }
 
     for (auto &t : listTriangles)
-      FillTriangle(t.p[0].x, t.p[0].y, t.p[1].x, t.p[1].y, t.p[2].x, t.p[2].y,
-                   t.col);
+      TexturedTriangle(t.p[0].x, t.p[0].y, t.t[0].u, t.t[0].v, t.p[1].x,
+                       t.p[1].y, t.t[1].u, t.t[1].v, t.p[2].x, t.p[2].y,
+                       t.t[2].u, t.t[2].v, sprite1, this);
+    // FillTriangle(t.p[0].x, t.p[0].y, t.p[1].x, t.p[1].y, t.p[2].x, t.p[2].y,
+    // t.col);
   }
 
   return true;

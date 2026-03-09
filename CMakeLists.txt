@@ -15,6 +15,7 @@ add_executable(engine
   src/mesh.cpp
   src/clipping.cpp
   src/engine.cpp
+  src/texturing.cpp
 )
 
 # 2. Linka a libpng junto com as outras

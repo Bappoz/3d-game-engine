@@ -17,6 +17,7 @@ private:
   vec3d vCamera = {0.0f, 0.0f, 0.0f};
   vec3d vLookDir;
   float fYam = 0.0f;
+  olc::Sprite *sprite1;
 
   olc::Pixel GetColour(float lum);
 };

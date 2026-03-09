@@ -9,7 +9,13 @@ find_package(PNG REQUIRED)
 
 include_directories(libs ${PNG_INCLUDE_DIRS})
 
-add_executable(engine main.cpp)
+add_executable(engine 
+  main.cpp
+  src/math_utils.cpp
+  src/mesh.cpp
+  src/clipping.cpp
+  src/engine.cpp
+)
 
 # 2. Linka a libpng junto com as outras
 if(MSVC)

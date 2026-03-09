@@ -3,7 +3,7 @@ bin/
 obj/
 
 .clangd
-
+.cache 
 # Arquivos gerados pelo CMake (caso não use pasta build separada)
 CMakeCache.txt
 CMakeFiles/
